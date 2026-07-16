@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, Eye } from 'lucide-react';
-import { listarSimulados, uploadSimulado, type SimuladoUpload } from '../api/simulados';
+import { Upload, Eye, Trash2 } from 'lucide-react';
+import { listarSimulados, uploadSimulado, deletarSimulado, type SimuladoUpload } from '../api/simulados';
 
 export default function Simulados() {
   const [lista, setLista] = useState<SimuladoUpload[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [deletando, setDeletando] = useState<number | null>(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
+  function carregar() {
+    setLoading(true);
     listarSimulados().then(setLista).finally(() => setLoading(false));
-  }, []);
+  }
+
+  useEffect(() => { carregar(); }, []);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -22,6 +26,17 @@ export default function Simulados() {
       navigate(`/simulados/${sim.id}`);
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleDeletar(id: number) {
+    if (!confirm('Tem certeza que deseja excluir este simulado? As questões associadas também serão removidas.')) return;
+    setDeletando(id);
+    try {
+      await deletarSimulado(id);
+      setLista((prev) => prev.filter((s) => s.id !== id));
+    } finally {
+      setDeletando(null);
     }
   }
 
@@ -47,9 +62,9 @@ export default function Simulados() {
       ) : (
         <div className="grid gap-4">
           {lista.map((s) => (
-            <div key={s.id} onClick={() => navigate(`/simulados/${s.id}`)}
-              className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
-              <div>
+            <div key={s.id}
+              className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow group">
+              <div className="flex-1" onClick={() => navigate(`/simulados/${s.id}`)}>
                 <p className="font-medium text-gray-800">
                   Simulado #{s.id}
                   {s.processado && <span className="ml-2 text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">Processado</span>}
@@ -58,7 +73,23 @@ export default function Simulados() {
                   {s.total_questoes_detectado ? `${s.total_questoes_detectado} questões` : 'Aguardando detecção'} • {new Date(s.criado_em).toLocaleDateString('pt-BR')}
                 </p>
               </div>
-              <Eye className="w-5 h-5 text-gray-400" />
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); navigate(`/simulados/${s.id}`); }}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Ver simulado"
+                >
+                  <Eye className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeletar(s.id); }}
+                  disabled={deletando === s.id}
+                  className="p-2 text-red-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                  title="Excluir simulado"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

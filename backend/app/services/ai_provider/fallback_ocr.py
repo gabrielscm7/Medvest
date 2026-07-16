@@ -64,5 +64,14 @@ class FallbackOCRProvider(BaseAIProvider):
         return {"total_questoes": 45, "alternativas_por_questao": 5, "numeracao_inicial": 1}
 
 
+_FALLBACK_QUESTIONS = [
+    {"numero": 1, "texto": "Um estudante precisa calcular a área de um triângulo retângulo com base 10 cm e altura 5 cm. Qual é a área?"},
+    {"numero": 2, "texto": "Leia o texto abaixo e identifique a figura de linguagem predominante: 'O sol beijava as flores do campo.'"},
+    {"numero": 3, "texto": "Sobre a Revolução Francesa, assinale a alternativa correta acerca da queda da Bastilha."},
+    {"numero": 4, "texto": "Em uma reação química, 2g de hidrogênio reagem com 16g de oxigênio. Qual a massa de água formada?"},
+    {"numero": 5, "texto": "Qual a função sintática do termo destacado em 'Os alunos estudam para a prova'?"},
+]
+
+
 def get_fallback_provider() -> FallbackOCRProvider:
     return FallbackOCRProvider()

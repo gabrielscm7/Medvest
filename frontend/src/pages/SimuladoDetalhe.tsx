@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Loader2, Sparkles, FileText, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Loader2, Sparkles, FileText, CheckCircle, Trash2 } from 'lucide-react';
 import {
   obterSimulado, detectarEstrutura, preencherGabarito,
-  extrairTextoQuestoes, classificarQuestoes,
+  extrairTextoQuestoes, classificarQuestoes, deletarSimulado,
   type Deteccao, type QuestaoGabarito, type QuestaoIdentificada
 } from '../api/simulados';
 
@@ -85,6 +85,12 @@ export default function SimuladoDetalhe() {
     }
   }
 
+  async function handleDeletar() {
+    if (!confirm('Tem certeza que deseja excluir este simulado?')) return;
+    await deletarSimulado(simuladoId);
+    navigate('/simulados');
+  }
+
   async function handleClassificar() {
     setProcessing(true);
     try {
@@ -143,6 +149,14 @@ export default function SimuladoDetalhe() {
           >
             <Sparkles className="w-4 h-4" />
             {processing ? 'Classificando...' : 'Classificar por IA'}
+          </button>
+          <button
+            onClick={handleDeletar}
+            disabled={processing}
+            className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm"
+          >
+            <Trash2 className="w-4 h-4" />
+            Excluir
           </button>
         </div>
       </div>

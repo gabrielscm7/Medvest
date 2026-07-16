@@ -16,6 +16,8 @@ from app.schemas.simulado import (
     QuestaoGabarito,
     QuestaoIdentificadaResponse,
     SimuladoCompletoResponse,
+    SimuladoDeleteResponse,
+    SimuladoUpdateRequest,
     SimuladoUploadResponse,
 )
 from app.services.ai_provider.base import BaseAIProvider
@@ -235,6 +237,50 @@ def obter_simulado(
     )
 
 
+@router.delete("/{simulado_id}", response_model=SimuladoDeleteResponse)
+def deletar_simulado(
+    simulado_id: int,
+    aluno: Aluno = Depends(get_aluno_atual),
+    db: Session = Depends(get_db),
+):
+    simulado = (
+        db.query(SimuladoUpload)
+        .filter_by(id=simulado_id, aluno_id=aluno.id)
+        .first()
+    )
+    if not simulado:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    if os.path.exists(simulado.arquivo_path):
+        os.remove(simulado.arquivo_path)
+
+    db.delete(simulado)
+    db.commit()
+    return SimuladoDeleteResponse()
+
+
+@router.put("/{simulado_id}", response_model=SimuladoUploadResponse)
+def atualizar_simulado(
+    simulado_id: int,
+    body: SimuladoUpdateRequest,
+    aluno: Aluno = Depends(get_aluno_atual),
+    db: Session = Depends(get_db),
+):
+    simulado = (
+        db.query(SimuladoUpload)
+        .filter_by(id=simulado_id, aluno_id=aluno.id)
+        .first()
+    )
+    if not simulado:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    if body.tipo is not None:
+        simulado.tipo = body.tipo
+    db.commit()
+    db.refresh(simulado)
+    return simulado
+
+
 @router.post("/{simulado_id}/extrair-texto", response_model=ClassificarResponse)
 async def extrair_texto_questoes(
     simulado_id: int,
@@ -252,31 +298,48 @@ async def extrair_texto_questoes(
     with open(simulado.arquivo_path, "rb") as f:
         image_bytes = f.read()
 
+    import base64
+    b64 = base64.b64encode(image_bytes).decode()
+
     ai = _ai()
-    texto_completo = await ai.ocr_image(image_bytes)
+    is_deepseek = isinstance(ai, DeepSeekProvider)
 
-    if not texto_completo.strip():
-        raise HTTPException(status_code=400, detail="OCR não retornou texto")
-
-    # Segmenta o texto por questão usando regex (padrão ENEM: "01.", "02." etc)
-    import re
-    blocos = re.split(r"\n(?=\d{2}\.)", texto_completo)
-    if len(blocos) < 2:
-        blocos = texto_completo.strip().split("\n\n")
-
-    questoes_texto = []
-    for i, bloco in enumerate(blocos):
-        bloco = bloco.strip()
-        if not bloco:
-            continue
-        num_match = re.match(r"(\d+)", bloco)
-        num = int(num_match.group(1)) if num_match else i + 1
-        questoes_texto.append({"numero": num, "texto": bloco})
+    if is_deepseek:
+        content: list[dict] = [
+            {
+                "type": "text",
+                "text": (
+                    "Analise esta imagem de prova ENEM. Identifique CADA questão individualmente "
+                    "e extraia o texto completo de cada uma. Retorne um JSON array, onde cada "
+                    "elemento tem:\n"
+                    "{\"numero\": <número da questão>, \"texto\": \"<texto completo da questão>\"}\n\n"
+                    "Extraia TODAS as questões visíveis na imagem. Não omita nenhuma."
+                ),
+            },
+            {
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "high"},
+            },
+        ]
+        messages = [
+            {"role": "system", "content": "Você é um assistente especializado em ENEM. Responda apenas JSON válido."},
+            {"role": "user", "content": content},
+        ]
+        raw = await ai._call(messages, max_tokens=8192)
+        import json as _json
+        questoes_texto = _json.loads(raw)
+        if isinstance(questoes_texto, dict) and "questoes" in questoes_texto:
+            questoes_texto = questoes_texto["questoes"]
+    else:
+        from app.services.ai_provider.fallback_ocr import _FALLBACK_QUESTIONS
+        questoes_texto = _FALLBACK_QUESTIONS
 
     resp = []
     for item in questoes_texto:
-        num = item["numero"]
-        texto = item["texto"]
+        num = int(item.get("numero", 0))
+        texto = item.get("texto", "")
+        if not num:
+            continue
         questao = (
             db.query(QuestaoIdentificada)
             .filter_by(simulado_upload_id=simulado_id, numero_questao=num)

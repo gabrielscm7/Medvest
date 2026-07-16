@@ -78,3 +78,7 @@ export function classificarQuestoes(simuladoId: number) {
 export function listarHabilidades() {
   return api.get<{ id: number; codigo: string; descricao: string }[]>('/simulados/habilidades');
 }
+
+export function deletarSimulado(simuladoId: number) {
+  return api.del<{ message: string }>(`/simulados/${simuladoId}`);
+}

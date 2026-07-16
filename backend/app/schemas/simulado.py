@@ -71,6 +71,14 @@ class HabilidadeResponse(BaseModel):
     descricao: str
 
 
+class SimuladoDeleteResponse(BaseModel):
+    message: str = "Simulado removido com sucesso"
+
+
+class SimuladoUpdateRequest(BaseModel):
+    tipo: Optional[str] = None
+
+
 class SimuladoCompletoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
