@@ -16,6 +16,7 @@ export default function Login() {
     setErro('');
     try {
       const { access_token } = await login({ email, senha });
+      localStorage.setItem('token', access_token);
       const aluno = await me();
       setAuth(access_token, aluno);
       navigate('/');
