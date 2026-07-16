@@ -55,7 +55,7 @@ if frontend_dir and os.path.isdir(frontend_dir):
 
     @app.get("/{full_path:path}")
     def serve_frontend(full_path: str):
-        if full_path.startswith("api/") or full_path.startswith("health") or full_path.startswith("docs") or full_path.startswith("openapi"):
+        if full_path in ("api", "health", "docs", "openapi") or full_path.startswith(("api/", "docs/", "openapi/")):
             raise HTTPException(status_code=404)
         filepath = os.path.join(frontend_dir, "index.html")
         if os.path.exists(filepath):
