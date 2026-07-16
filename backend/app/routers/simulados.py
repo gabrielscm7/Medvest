@@ -305,28 +305,35 @@ async def extrair_texto_questoes(
     is_deepseek = isinstance(ai, DeepSeekProvider)
 
     if is_deepseek:
-        content: list[dict] = [
-            {
-                "type": "text",
-                "text": (
-                    "Analise esta imagem de prova ENEM. Identifique CADA questão individualmente "
-                    "e extraia o texto completo de cada uma. Retorne um JSON array, onde cada "
-                    "elemento tem:\n"
-                    "{\"numero\": <número da questão>, \"texto\": \"<texto completo da questão>\"}\n\n"
-                    "Extraia TODAS as questões visíveis na imagem. Não omita nenhuma."
-                ),
-            },
-            {
-                "type": "image_url",
-                "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "high"},
-            },
-        ]
-        messages = [
-            {"role": "system", "content": "Você é um assistente especializado em ENEM. Responda apenas JSON válido."},
-            {"role": "user", "content": content},
-        ]
-        raw = await ai._call(messages, max_tokens=8192)
         import json as _json
+        client = ai._get_client()
+        response = await client.post(
+            "/chat/completions",
+            json={
+                "model": ai.model,
+                "messages": [
+                    {"role": "system", "content": "Você é um assistente especializado em ENEM."},
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": (
+                                "Analise esta imagem de prova ENEM. Identifique CADA questão "
+                                "individualmente e extraia o texto completo de cada uma. "
+                                "Retorne UM JSON ARRAY, onde cada elemento tem:\n"
+                                '{"numero": <número>, "texto": "<texto completo>"}\n\n'
+                                "Extraia TODAS as questões visíveis. Responda apenas o JSON, sem explicações."
+                            )},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                        ],
+                    },
+                ],
+                "max_tokens": 4096,
+                "temperature": 0.1,
+            },
+        )
+        if response.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Erro da API DeepSeek: {response.text}")
+        raw = response.json()["choices"][0]["message"]["content"]
         questoes_texto = _json.loads(raw)
         if isinstance(questoes_texto, dict) and "questoes" in questoes_texto:
             questoes_texto = questoes_texto["questoes"]
