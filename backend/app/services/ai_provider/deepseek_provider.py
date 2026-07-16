@@ -1,5 +1,6 @@
 import base64
 import json
+import os
 from typing import Optional
 
 import httpx
@@ -19,7 +20,7 @@ class DeepSeekProvider(BaseAIProvider):
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
         self.api_key = api_key or settings.DEEPSEEK_API_KEY
-        self.model = model or "deepseek-v4-pro"
+        self.model = model or os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
         self.base_url = "https://api.deepseek.com/v1"
         self._client: Optional[httpx.AsyncClient] = None
 
