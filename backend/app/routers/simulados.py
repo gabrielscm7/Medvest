@@ -19,7 +19,7 @@ from app.services.ai_provider.deepseek_provider import get_ai_provider
 from app.services.ai_provider.fallback_ocr import get_fallback_provider
 from app.services.auth import get_aluno_atual
 
-router = APIRouter(prefix="/simulados", tags=["Simulados"])
+router = APIRouter(prefix="/api/simulados", tags=["Simulados"])
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)

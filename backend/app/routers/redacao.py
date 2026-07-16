@@ -12,7 +12,7 @@ from app.services.ai_provider.deepseek_provider import get_ai_provider
 from app.services.ai_provider.fallback_ocr import get_fallback_provider
 from app.services.auth import get_aluno_atual
 
-router = APIRouter(prefix="/redacoes", tags=["Redação"])
+router = APIRouter(prefix="/api/redacoes", tags=["Redação"])
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)

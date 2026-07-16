@@ -17,7 +17,7 @@ from app.services.ai_provider.fallback_ocr import get_fallback_provider
 from app.services.auth import get_aluno_atual
 from app.services.flashcard_scheduler import agendar_revisao, get_flashcards_pendentes
 
-router = APIRouter(prefix="/flashcards", tags=["Flashcards"])
+router = APIRouter(prefix="/api/flashcards", tags=["Flashcards"])
 
 
 def _ai() -> BaseAIProvider:

@@ -15,7 +15,7 @@ from app.services.auth import get_aluno_atual
 from app.services.prioritization import recalcular_prioridades
 from app.services.temporal_planning import recalcular_macrociclo
 
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
+router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 
 @router.get("/", response_model=DashboardResponse)

@@ -20,14 +20,14 @@ def setup_db():
 
 def _register():
     return client.post(
-        "/auth/register",
+        "/api/auth/register",
         json={"nome": "Aluno Teste", "email": ALUNO_EMAIL, "senha": ALUNO_SENHA},
     )
 
 
 def _login():
     resp = client.post(
-        "/auth/login", json={"email": ALUNO_EMAIL, "senha": ALUNO_SENHA}
+        "/api/auth/login", json={"email": ALUNO_EMAIL, "senha": ALUNO_SENHA}
     )
     return resp.json()["access_token"]
 
@@ -72,33 +72,33 @@ class TestAuth:
     def test_login(self):
         _register()
         resp = client.post(
-            "/auth/login", json={"email": ALUNO_EMAIL, "senha": ALUNO_SENHA}
+            "/api/auth/login", json={"email": ALUNO_EMAIL, "senha": ALUNO_SENHA}
         )
         assert resp.status_code == 200
         assert "access_token" in resp.json()
 
     def test_login_invalid(self):
         resp = client.post(
-            "/auth/login", json={"email": ALUNO_EMAIL, "senha": "wrong"}
+            "/api/auth/login", json={"email": ALUNO_EMAIL, "senha": "wrong"}
         )
         assert resp.status_code == 401
 
     def test_me(self):
         _register()
         token = _login()
-        resp = client.get("/auth/me", headers=_auth_header(token))
+        resp = client.get("/api/auth/me", headers=_auth_header(token))
         assert resp.status_code == 200
         assert resp.json()["email"] == ALUNO_EMAIL
 
     def test_me_unauthorized(self):
-        resp = client.get("/auth/me")
+        resp = client.get("/api/auth/me")
         assert resp.status_code == 401
 
     def test_bem_estar(self):
         _register()
         token = _login()
         resp = client.post(
-            "/auth/bem-estar",
+            "/api/auth/bem-estar",
             json={"data": "2026-07-16", "sono": "bom", "energia": "alta"},
             headers=_auth_header(token),
         )
@@ -110,7 +110,7 @@ class TestSimulados:
     def test_list_empty(self):
         _register()
         token = _login()
-        resp = client.get("/simulados/", headers=_auth_header(token))
+        resp = client.get("/api/simulados/", headers=_auth_header(token))
         assert resp.status_code == 200
         assert resp.json() == []
 
@@ -118,14 +118,14 @@ class TestSimulados:
         _register()
         token = _login()
         upload_resp = client.post(
-            "/simulados/upload",
+            "/api/simulados/upload",
             files={"file": ("test.png", b"fake_image_bytes", "image/png")},
             headers=_auth_header(token),
         )
         assert upload_resp.status_code == 201
         sim_id = upload_resp.json()["id"]
 
-        resp = client.get(f"/simulados/{sim_id}", headers=_auth_header(token))
+        resp = client.get(f"/api/simulados/{sim_id}", headers=_auth_header(token))
         assert resp.status_code == 200
         assert resp.json()["id"] == sim_id
 
@@ -133,14 +133,14 @@ class TestSimulados:
         _register()
         token = _login()
         upload_resp = client.post(
-            "/simulados/upload",
+            "/api/simulados/upload",
             files={"file": ("test.png", b"fake_image_bytes", "image/png")},
             headers=_auth_header(token),
         )
         sim_id = upload_resp.json()["id"]
 
         resp = client.put(
-            f"/simulados/{sim_id}/gabarito",
+            f"/api/simulados/{sim_id}/gabarito",
             json={
                 "questoes": [
                     {"numero_questao": 1, "resposta_aluno": "C", "resposta_correta": "C"},
@@ -161,7 +161,7 @@ class TestRedacao:
         _register()
         token = _login()
         resp = client.post(
-            "/redacoes/upload",
+            "/api/redacoes/upload",
             files={"file": ("redacao.png", b"handwritten essay text", "image/png")},
             headers=_auth_header(token),
         )
@@ -171,7 +171,7 @@ class TestRedacao:
     def test_list_redacoes(self):
         _register()
         token = _login()
-        resp = client.get("/redacoes/", headers=_auth_header(token))
+        resp = client.get("/api/redacoes/", headers=_auth_header(token))
         assert resp.status_code == 200
         assert isinstance(resp.json(), list)
 
@@ -180,7 +180,7 @@ class TestDashboard:
     def test_dashboard(self):
         _register()
         token = _login()
-        resp = client.get("/dashboard/", headers=_auth_header(token))
+        resp = client.get("/api/dashboard/", headers=_auth_header(token))
         assert resp.status_code == 200
         data = resp.json()
         assert "nota_estimada" in data
@@ -192,7 +192,7 @@ class TestFlashcards:
     def test_list_pendentes(self):
         _register()
         token = _login()
-        resp = client.get("/flashcards/pendentes", headers=_auth_header(token))
+        resp = client.get("/api/flashcards/pendentes", headers=_auth_header(token))
         assert resp.status_code == 200
         assert resp.json() == []
 
@@ -201,7 +201,7 @@ class TestFlashcards:
         token = _login()
         hid = _seed_habilidade()
         resp = client.post(
-            "/flashcards/gerar",
+            "/api/flashcards/gerar",
             json={"habilidade_id": hid, "quantidade": 2},
             headers=_auth_header(token),
         )
@@ -214,14 +214,14 @@ class TestFlashcards:
         token = _login()
         hid = _seed_habilidade()
         gen = client.post(
-            "/flashcards/gerar",
+            "/api/flashcards/gerar",
             json={"habilidade_id": hid, "quantidade": 1},
             headers=_auth_header(token),
         )
         fid = gen.json()[0]["id"]
 
         resp = client.post(
-            f"/flashcards/{fid}/revisar",
+            f"/api/flashcards/{fid}/revisar",
             json={"dificuldade": "facil"},
             headers=_auth_header(token),
         )
@@ -231,7 +231,7 @@ class TestFlashcards:
 
 class TestHealth:
     def test_root(self):
-        resp = client.get("/")
+        resp = client.get("/api")
         assert resp.status_code == 200
         assert resp.json()["message"]
 

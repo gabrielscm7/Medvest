@@ -12,7 +12,7 @@ from app.services.auth import (
     verificar_senha,
 )
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 
 @router.post("/register", response_model=AlunoResponse, status_code=status.HTTP_201_CREATED)

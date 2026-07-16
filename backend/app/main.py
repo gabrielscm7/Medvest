@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+import os
+
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from fastapi import Depends, HTTPException
 
 from app.core.database import get_db, engine, Base
 from app.models import *  # noqa: F401,F403
@@ -40,6 +42,22 @@ def health_check(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
 
 
-@app.get("/", tags=["System"])
+@app.get("/api", tags=["System"])
 def root():
     return {"message": "Bem-vindo à API Medvest!", "docs_url": "/docs"}
+
+
+frontend_dir = os.getenv("FRONTEND_DIR", "")
+if frontend_dir and os.path.isdir(frontend_dir):
+    from fastapi.responses import FileResponse
+
+    app.mount("/assets", StaticFiles(directory=f"{frontend_dir}/assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    def serve_frontend(full_path: str):
+        if full_path.startswith("api/") or full_path.startswith("health") or full_path.startswith("docs") or full_path.startswith("openapi"):
+            raise HTTPException(status_code=404)
+        filepath = os.path.join(frontend_dir, "index.html")
+        if os.path.exists(filepath):
+            return FileResponse(filepath, media_type="text/html")
+        raise HTTPException(status_code=404)
