@@ -1,0 +1,5 @@
+[package]
+name = "medvest"
+version = "0.2.0"
+description = "Sistema Adaptativo de Preparação ENEM — Foco Medicina"
+requires-python = ">=3.11"
