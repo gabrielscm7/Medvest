@@ -42,7 +42,7 @@ export default function SimuladoDetalhe() {
       if (existente) {
         return prev.map((q) => q.numero_questao === numero ? { ...q, [campo]: valor } : q);
       }
-      return [...prev, { numero_questao: numero, [campo]: valor, resposta_aluno: null, resposta_correta: null }];
+      return [...prev, { numero_questao: numero, resposta_aluno: null, resposta_correta: null, [campo]: valor }];
     });
   }
 
