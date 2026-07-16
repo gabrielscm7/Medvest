@@ -23,7 +23,7 @@ def recalcular_prioridades(db: Session, aluno_id: int) -> list[DominioHabilidade
             )
             db.add(dominio)
 
-        taxa = dominio.taxa_acerto or 0.0
+        taxa = float(dominio.taxa_acerto or 0.0)
 
         dias_sem_pratica = 0.0
         if dominio.ultima_pratica:
@@ -31,7 +31,7 @@ def recalcular_prioridades(db: Session, aluno_id: int) -> list[DominioHabilidade
             dias_sem_pratica = float(delta)
         fator_recencia = min(dias_sem_pratica / 14.0, 2.0)
 
-        peso = h.competencia.area.peso_medicina or 1.0
+        peso = float(h.competencia.area.peso_medicina or 1.0)
         incidencia = _calcular_incidencia_historica(db, aluno_id, h.id)
 
         prioridade = peso * (1.0 - taxa) * fator_recencia * (1.0 + incidencia)
@@ -49,9 +49,9 @@ def recalcular_prioridades(db: Session, aluno_id: int) -> list[DominioHabilidade
 def _calcular_incidencia_historica(db: Session, aluno_id: int, habilidade_id: int) -> float:
     questoes = (
         db.query(QuestaoIdentificada)
-        .join(QuestaoIdentificada.simulado)
+        .join(QuestaoIdentificada.simulado_upload)
         .filter(
-            QuestaoIdentificada.simulado.has(aluno_id=aluno_id),
+            QuestaoIdentificada.simulado_upload.has(aluno_id=aluno_id),
             QuestaoIdentificada.habilidade_id == habilidade_id,
         )
         .count()

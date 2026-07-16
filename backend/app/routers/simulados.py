@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 
@@ -5,19 +6,23 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models import Aluno, QuestaoIdentificada, SimuladoUpload
+from app.models import Aluno, Area, Competencia, Habilidade, QuestaoIdentificada, SimuladoUpload
 from app.schemas.simulado import (
+    ClassificacaoOutput,
+    ClassificarResponse,
     DeteccaoResponse,
     GabaritoPreenchimento,
+    HabilidadeResponse,
     QuestaoGabarito,
     QuestaoIdentificadaResponse,
     SimuladoCompletoResponse,
     SimuladoUploadResponse,
 )
 from app.services.ai_provider.base import BaseAIProvider
-from app.services.ai_provider.deepseek_provider import get_ai_provider
+from app.services.ai_provider.deepseek_provider import DeepSeekProvider, get_ai_provider
 from app.services.ai_provider.fallback_ocr import get_fallback_provider
 from app.services.auth import get_aluno_atual
+from app.services.prioritization import recalcular_prioridades
 
 router = APIRouter(prefix="/api/simulados", tags=["Simulados"])
 
@@ -154,6 +159,8 @@ def preencher_gabarito(
     simulado.processado = True
     db.commit()
 
+    recalcular_prioridades(db, aluno.id)
+
     questoes_db = (
         db.query(QuestaoIdentificada)
         .filter_by(simulado_upload_id=simulado_id)
@@ -177,6 +184,11 @@ def preencher_gabarito(
             for q in questoes_db
         ],
     )
+
+
+@router.get("/habilidades", response_model=list[HabilidadeResponse])
+def listar_habilidades(db: Session = Depends(get_db)):
+    return db.query(Habilidade).order_by(Habilidade.codigo).all()
 
 
 @router.get("/{simulado_id}", response_model=SimuladoCompletoResponse)
@@ -212,6 +224,7 @@ def obter_simulado(
                 habilidade_codigo=q.habilidade.codigo if q.habilidade else None,
                 tema_livre=q.tema_livre,
                 dificuldade_estimada=q.dificuldade_estimada,
+                texto_questao=q.texto_questao,
                 resposta_aluno=q.resposta_aluno,
                 resposta_correta=q.resposta_correta,
                 acerto=q.acerto,
@@ -219,4 +232,147 @@ def obter_simulado(
             )
             for q in questoes_db
         ],
+    )
+
+
+@router.post("/{simulado_id}/extrair-texto", response_model=ClassificarResponse)
+async def extrair_texto_questoes(
+    simulado_id: int,
+    aluno: Aluno = Depends(get_aluno_atual),
+    db: Session = Depends(get_db),
+):
+    simulado = (
+        db.query(SimuladoUpload)
+        .filter_by(id=simulado_id, aluno_id=aluno.id)
+        .first()
+    )
+    if not simulado:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    with open(simulado.arquivo_path, "rb") as f:
+        image_bytes = f.read()
+
+    ai = _ai()
+    texto_completo = await ai.ocr_image(image_bytes)
+
+    if not texto_completo.strip():
+        raise HTTPException(status_code=400, detail="OCR não retornou texto")
+
+    # Segmenta o texto por questão usando regex (padrão ENEM: "01.", "02." etc)
+    import re
+    blocos = re.split(r"\n(?=\d{2}\.)", texto_completo)
+    if len(blocos) < 2:
+        blocos = texto_completo.strip().split("\n\n")
+
+    questoes_texto = []
+    for i, bloco in enumerate(blocos):
+        bloco = bloco.strip()
+        if not bloco:
+            continue
+        num_match = re.match(r"(\d+)", bloco)
+        num = int(num_match.group(1)) if num_match else i + 1
+        questoes_texto.append({"numero": num, "texto": bloco})
+
+    resp = []
+    for item in questoes_texto:
+        num = item["numero"]
+        texto = item["texto"]
+        questao = (
+            db.query(QuestaoIdentificada)
+            .filter_by(simulado_upload_id=simulado_id, numero_questao=num)
+            .first()
+        )
+        if questao:
+            questao.texto_questao = texto
+        else:
+            questao = QuestaoIdentificada(
+                simulado_upload_id=simulado_id,
+                numero_questao=num,
+                texto_questao=texto,
+            )
+            db.add(questao)
+        resp.append(questao)
+
+    db.commit()
+    return ClassificarResponse(
+        questoes=[
+            ClassificacaoOutput(
+                id=q.id,
+                numero_questao=q.numero_questao,
+                texto_questao=q.texto_questao,
+                classificacao_confirmada_manualmente=q.classificacao_confirmada_manualmente,
+            )
+            for q in resp
+        ]
+    )
+
+
+@router.post("/{simulado_id}/classificar", response_model=ClassificarResponse)
+async def classificar_questoes(
+    simulado_id: int,
+    aluno: Aluno = Depends(get_aluno_atual),
+    db: Session = Depends(get_db),
+):
+    simulado = (
+        db.query(SimuladoUpload)
+        .filter_by(id=simulado_id, aluno_id=aluno.id)
+        .first()
+    )
+    if not simulado:
+        raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    questoes = (
+        db.query(QuestaoIdentificada)
+        .filter_by(simulado_upload_id=simulado_id)
+        .all()
+    )
+
+    with open(simulado.arquivo_path, "rb") as f:
+        image_bytes = f.read()
+
+    ai = _ai()
+
+    for q in questoes:
+        texto = q.texto_questao or ""
+        if not texto.strip():
+            continue
+
+        try:
+            result = await ai.classify_question(texto, image_bytes)
+        except Exception:
+            continue
+
+        habilidade_codigo = result.get("habilidade", "")
+        tema_livre = result.get("tema_livre", "")
+        dificuldade_raw = result.get("dificuldade", "media")
+
+        dificuldade_map = {"facil": 1.0, "media": 2.0, "dificil": 3.0}
+        q.dificuldade_estimada = dificuldade_map.get(dificuldade_raw, 2.0)
+        q.tema_livre = tema_livre
+
+        if habilidade_codigo:
+            area_nome = result.get("area", "")
+            query = db.query(Habilidade).filter(Habilidade.codigo == habilidade_codigo)
+            if area_nome:
+                query = query.join(Competencia).join(Area).filter(Area.nome == area_nome)
+            habilidade = query.first()
+            if habilidade:
+                q.habilidade_id = habilidade.id
+
+    db.commit()
+    recalcular_prioridades(db, aluno.id)
+
+    return ClassificarResponse(
+        questoes=[
+            ClassificacaoOutput(
+                id=q.id,
+                numero_questao=q.numero_questao,
+                habilidade_codigo=q.habilidade.codigo if q.habilidade else None,
+                tema_livre=q.tema_livre,
+                dificuldade_estimada=q.dificuldade_estimada,
+                texto_questao=q.texto_questao,
+                classificacao_confirmada_manualmente=q.classificacao_confirmada_manualmente,
+            )
+            for q in questoes
+        ]
     )

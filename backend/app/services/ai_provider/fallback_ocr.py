@@ -7,26 +7,35 @@ class FallbackOCRProvider(BaseAIProvider):
     """Fallback provider for offline testing — no API key required."""
 
     async def ocr_image(self, image_bytes: bytes) -> str:
-        return "[FALLBACK OCR] Imagem recebida, OCR real requer DeepSeek API."
+        return (
+            "01. Um estudante precisa calcular a área de um triângulo retângulo "
+            "com base 10 cm e altura 5 cm. Qual é a área?\n"
+            "02. Leia o texto abaixo e identifique a figura de linguagem "
+            "predominante: 'O sol beijava as flores do campo.'\n"
+            "03. Sobre a Revolução Francesa, assinale a alternativa correta "
+            "acerca da queda da Bastilha.\n"
+            "04. Em uma reação química, 2g de hidrogênio reagem com 16g de "
+            "oxigênio. Qual a massa de água formada?"
+        )
 
     async def classify_question(
         self, question_text: str, image_bytes: Optional[bytes] = None
     ) -> dict:
-        area = "Ciências da Natureza e suas Tecnologias"
-        if any(w in question_text.lower() for w in ["grafia", "leitura", "texto", "língua", "linguagem"]):
-            area = "Linguagens, Códigos e suas Tecnologias"
-        elif any(w in question_text.lower() for w in ["cálculo", "número", "equação", "gráfico", "função"]):
-            area = "Matemática e suas Tecnologias"
-        elif any(w in question_text.lower() for w in ["história", "geografia", "sociedade", "política"]):
-            area = "Ciências Humanas e suas Tecnologias"
+        text = question_text.lower()
+        if any(w in text for w in ["cálculo", "número", "equação", "gráfico", "função", "área", "volume", "probabilidade"]):
+            return {"area": "Matemática e suas Tecnologias", "competencia": 2, "habilidade": "H9", "tema_livre": "matemática básica", "dificuldade": "media"}
+        if any(w in text for w in ["reação", "química", "átomo", "molécula", "elemento", "hidrogênio", "oxigênio"]):
+            return {"area": "Ciências da Natureza e suas Tecnologias", "competencia": 5, "habilidade": "H17", "tema_livre": "química geral", "dificuldade": "media"}
+        if any(w in text for w in ["célula", "dna", "gene", "organismo", "espécie", "ecossistema"]):
+            return {"area": "Ciências da Natureza e suas Tecnologias", "competencia": 4, "habilidade": "H14", "tema_livre": "biologia", "dificuldade": "media"}
+        if any(w in text for w in ["história", "revolução", "guerra", "política", "sociedade", "bastilha", "economia"]):
+            return {"area": "Ciências Humanas e suas Tecnologias", "competencia": 6, "habilidade": "H21", "tema_livre": "história geral", "dificuldade": "media"}
+        if any(w in text for w in ["geografia", "mapa", "clima", "relevo", "população", "urbano"]):
+            return {"area": "Ciências Humanas e suas Tecnologias", "competencia": 7, "habilidade": "H24", "tema_livre": "geografia", "dificuldade": "media"}
+        if any(w in text for w in ["grafia", "leitura", "texto", "língua", "linguagem", "figura", "literatura"]):
+            return {"area": "Linguagens, Códigos e suas Tecnologias", "competencia": 1, "habilidade": "H3", "tema_livre": "interpretação textual", "dificuldade": "media"}
 
-        return {
-            "area": area,
-            "competencia": 1,
-            "habilidade": "H1",
-            "tema_livre": "classificação automática (fallback)",
-            "dificuldade": "media",
-        }
+        return {"area": "Ciências da Natureza e suas Tecnologias", "competencia": 1, "habilidade": "H1", "tema_livre": "classificação automática (fallback)", "dificuldade": "media"}
 
     async def correct_essay(
         self, essay_text: str, image_bytes: Optional[bytes] = None

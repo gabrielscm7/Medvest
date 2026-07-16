@@ -40,10 +40,35 @@ class QuestaoIdentificadaResponse(BaseModel):
     habilidade_codigo: Optional[str] = None
     tema_livre: Optional[str] = None
     dificuldade_estimada: Optional[float] = None
+    texto_questao: Optional[str] = None
     resposta_aluno: Optional[str] = None
     resposta_correta: Optional[str] = None
     acerto: Optional[bool] = None
     classificacao_confirmada_manualmente: bool = False
+
+
+class ClassificacaoOutput(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    numero_questao: int
+    habilidade_codigo: Optional[str] = None
+    tema_livre: Optional[str] = None
+    dificuldade_estimada: Optional[float] = None
+    texto_questao: Optional[str] = None
+    classificacao_confirmada_manualmente: bool = False
+
+
+class ClassificarResponse(BaseModel):
+    questoes: list[ClassificacaoOutput]
+
+
+class HabilidadeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    codigo: str
+    descricao: str
 
 
 class SimuladoCompletoResponse(BaseModel):

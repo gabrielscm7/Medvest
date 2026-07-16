@@ -28,6 +28,7 @@ export interface QuestaoIdentificada {
   habilidade_codigo: string | null;
   tema_livre: string | null;
   dificuldade_estimada: number | null;
+  texto_questao: string | null;
   resposta_aluno: string | null;
   resposta_correta: string | null;
   acerto: boolean | null;
@@ -60,4 +61,20 @@ export function preencherGabarito(simuladoId: number, questoes: QuestaoGabarito[
 
 export function obterSimulado(simuladoId: number) {
   return api.get<SimuladoCompleto>(`/simulados/${simuladoId}`);
+}
+
+export interface ClassificacaoResponse {
+  questoes: QuestaoIdentificada[];
+}
+
+export function extrairTextoQuestoes(simuladoId: number) {
+  return api.post<ClassificacaoResponse>(`/simulados/${simuladoId}/extrair-texto`);
+}
+
+export function classificarQuestoes(simuladoId: number) {
+  return api.post<ClassificacaoResponse>(`/simulados/${simuladoId}/classificar`);
+}
+
+export function listarHabilidades() {
+  return api.get<{ id: number; codigo: string; descricao: string }[]>('/simulados/habilidades');
 }

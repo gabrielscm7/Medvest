@@ -90,6 +90,7 @@ class QuestaoIdentificada(Base):
     habilidade_id: Mapped[Optional[int]] = mapped_column(ForeignKey("habilidade.id"), nullable=True)
     tema_livre: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     dificuldade_estimada: Mapped[Optional[float]] = mapped_column(Numeric, nullable=True)
+    texto_questao: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resposta_aluno: Mapped[Optional[str]] = mapped_column(String(1), nullable=True)
     resposta_correta: Mapped[Optional[str]] = mapped_column(String(1), nullable=True)
     acerto: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
