@@ -10,6 +10,7 @@ from app.schemas.redacao import CompetenciaNota, CorrecaoResponse, RedacaoRespon
 from app.services.ai_provider.base import BaseAIProvider
 from app.services.ai_provider.deepseek_provider import get_ai_provider
 from app.services.ai_provider.fallback_ocr import get_fallback_provider
+from app.services.ai_provider.qwen_provider import get_qwen_provider
 from app.services.auth import get_aluno_atual
 
 router = APIRouter(prefix="/api/redacoes", tags=["Redação"])
@@ -23,6 +24,13 @@ def _ai() -> BaseAIProvider:
     if provider.api_key and provider.api_key != "your-deepseek-key-here":
         return provider
     return get_fallback_provider()
+
+
+def _ocr() -> BaseAIProvider:
+    qwen = get_qwen_provider()
+    if qwen.api_key:
+        return qwen
+    return _ai()
 
 
 @router.get("/", response_model=list[RedacaoResponse])
@@ -52,8 +60,8 @@ async def upload_redacao(
     with open(caminho, "wb") as f:
         f.write(image_bytes)
 
-    ai = _ai()
-    texto_ocr = await ai.ocr_image(image_bytes)
+    ocr = _ocr()
+    texto_ocr = await ocr.ocr_image(image_bytes)
 
     redacao = Redacao(
         aluno_id=aluno.id,

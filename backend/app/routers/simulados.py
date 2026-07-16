@@ -1,4 +1,3 @@
-import json
 import os
 import uuid
 
@@ -23,6 +22,7 @@ from app.schemas.simulado import (
 from app.services.ai_provider.base import BaseAIProvider
 from app.services.ai_provider.deepseek_provider import DeepSeekProvider, get_ai_provider
 from app.services.ai_provider.fallback_ocr import get_fallback_provider
+from app.services.ai_provider.qwen_provider import QwenProvider, get_qwen_provider
 from app.services.auth import get_aluno_atual
 from app.services.prioritization import recalcular_prioridades
 
@@ -37,6 +37,24 @@ def _ai() -> BaseAIProvider:
     if provider.api_key and provider.api_key != "your-deepseek-key-here":
         return provider
     return get_fallback_provider()
+
+
+def _ocr() -> QwenProvider | BaseAIProvider:
+    provider = get_qwen_provider()
+    if provider.api_key:
+        return provider
+    return _ai()
+
+
+def _is_pdf(path: str) -> bool:
+    return path.lower().endswith(".pdf")
+
+
+def _convert_pdf_to_markdown(path: str) -> str:
+    from markitdown import MarkItDown
+    md = MarkItDown()
+    result = md.convert(path)
+    return result.text_content
 
 
 @router.get("/", response_model=list[SimuladoUploadResponse])
@@ -91,11 +109,19 @@ async def detectar_estrutura(
     if not simulado:
         raise HTTPException(status_code=404, detail="Simulado não encontrado")
 
-    with open(simulado.arquivo_path, "rb") as f:
-        image_bytes = f.read()
-
-    ai = _ai()
-    estrutura = await ai.detect_exam_structure(image_bytes)
+    qwen = get_qwen_provider()
+    if not qwen.api_key and not _is_pdf(simulado.arquivo_path):
+        # fallback: tenta DeepSeek para detecção visual
+        with open(simulado.arquivo_path, "rb") as f:
+            image_bytes = f.read()
+        ai = _ai()
+        estrutura = await ai.detect_exam_structure(image_bytes)
+    elif _is_pdf(simulado.arquivo_path) and not qwen.api_key:
+        estrutura = {"total_questoes": 90, "alternativas_por_questao": 5, "numeracao_inicial": 1}
+    else:
+        with open(simulado.arquivo_path, "rb") as f:
+            image_bytes = f.read()
+        estrutura = await qwen.detect_exam_structure(image_bytes)
 
     simulado.total_questoes_detectado = estrutura.get("total_questoes", 45)
     simulado.alternativas_por_questao = estrutura.get("alternativas_por_questao", 5)
@@ -295,51 +321,75 @@ async def extrair_texto_questoes(
     if not simulado:
         raise HTTPException(status_code=404, detail="Simulado não encontrado")
 
-    with open(simulado.arquivo_path, "rb") as f:
-        image_bytes = f.read()
-
-    import base64
-    b64 = base64.b64encode(image_bytes).decode()
-
     ai = _ai()
     is_deepseek = isinstance(ai, DeepSeekProvider)
 
-    if is_deepseek:
-        import json as _json
-        client = ai._get_client()
-        response = await client.post(
-            "/chat/completions",
-            json={
-                "model": ai.model,
-                "messages": [
-                    {"role": "system", "content": "Você é um assistente especializado em ENEM."},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": (
-                                "Analise esta imagem de prova ENEM. Identifique CADA questão "
-                                "individualmente e extraia o texto completo de cada uma. "
-                                "Retorne UM JSON ARRAY, onde cada elemento tem:\n"
-                                '{"numero": <número>, "texto": "<texto completo>"}\n\n'
-                                "Extraia TODAS as questões visíveis. Responda apenas o JSON, sem explicações."
-                            )},
-                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                        ],
-                    },
-                ],
-                "max_tokens": 4096,
-                "temperature": 0.1,
-            },
-        )
+    if not is_deepseek:
+        from app.services.ai_provider.fallback_ocr import _FALLBACK_QUESTIONS
+        questoes_texto = _FALLBACK_QUESTIONS
+    else:
+        if _is_pdf(simulado.arquivo_path):
+            md_text = _convert_pdf_to_markdown(simulado.arquivo_path)
+            prompt = (
+                "Analise este texto de prova ENEM extraído de um PDF. "
+                "Identifique CADA questão individualmente e extraia o texto completo de cada uma. "
+                "Retorne UM JSON ARRAY, onde cada elemento tem:\n"
+                '{"numero": <número>, "texto": "<texto completo>"}\n\n'
+                "Extraia TODAS as questões. Responda apenas o JSON, sem explicações.\n\n"
+                f"Texto:\n{md_text}"
+            )
+            client = ai._get_client()
+            response = await client.post(
+                "/chat/completions",
+                json={
+                    "model": ai.model,
+                    "messages": [
+                        {"role": "system", "content": "Você é um assistente especializado em ENEM."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 8192,
+                    "temperature": 0.1,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+        else:
+            import base64
+            with open(simulado.arquivo_path, "rb") as f:
+                image_bytes = f.read()
+
+            qwen = _ocr()
+            ocr_text = await qwen.ocr_image(image_bytes)
+
+            prompt = (
+                "Analise o texto abaixo extraído de uma prova ENEM via OCR. "
+                "Identifique CADA questão individualmente e extraia o texto completo de cada uma. "
+                "Retorne UM JSON ARRAY, onde cada elemento tem:\n"
+                '{"numero": <número>, "texto": "<texto completo>"}\n\n'
+                "Extraia TODAS as questões. Responda apenas o JSON, sem explicações.\n\n"
+                f"Texto OCR:\n{ocr_text}"
+            )
+            client = ai._get_client()
+            response = await client.post(
+                "/chat/completions",
+                json={
+                    "model": ai.model,
+                    "messages": [
+                        {"role": "system", "content": "Você é um assistente especializado em ENEM."},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 8192,
+                    "temperature": 0.1,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+
         if response.status_code != 200:
             raise HTTPException(status_code=502, detail=f"Erro da API DeepSeek: {response.text}")
         raw = response.json()["choices"][0]["message"]["content"]
+        import json as _json
         questoes_texto = _json.loads(raw)
         if isinstance(questoes_texto, dict) and "questoes" in questoes_texto:
             questoes_texto = questoes_texto["questoes"]
-    else:
-        from app.services.ai_provider.fallback_ocr import _FALLBACK_QUESTIONS
-        questoes_texto = _FALLBACK_QUESTIONS
 
     resp = []
     for item in questoes_texto:
