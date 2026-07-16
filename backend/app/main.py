@@ -12,6 +12,17 @@ from app.routers import auth, flashcards, simulados, redacao, dashboard
 
 Base.metadata.create_all(bind=engine)
 
+# Migrações incrementais (colunas novas em tabelas existentes)
+with engine.connect() as conn:
+    for stmt in [
+        "ALTER TABLE questao_identificada ADD COLUMN IF NOT EXISTS texto_questao TEXT",
+    ]:
+        try:
+            conn.execute(text(stmt))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
 app = FastAPI(
     title="Medvest API",
     description="Sistema Adaptativo de Preparação ENEM — Foco Medicina",
