@@ -11,3 +11,5 @@ dist/
 build/
 .mypy_cache/
 .ruff_cache/
+Users/
+.ponytail-checkout/

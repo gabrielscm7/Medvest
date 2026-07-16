@@ -91,12 +91,19 @@ if __name__ == "__main__":
     print("Criando tabelas do banco de dados (se não existirem)...")
     Base.metadata.create_all(bind=engine)
     
-    # Path to json file (workspace root)
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    app_dir = os.path.dirname(script_dir)
-    backend_dir = os.path.dirname(app_dir)
-    root_dir = os.path.dirname(backend_dir)
-    json_file_path = os.path.join(root_dir, "matriz_estruturada.json")
+    candidates = [
+        os.path.join(script_dir, "..", "..", "matriz_estruturada.json"),
+        os.path.join(script_dir, "..", "..", "..", "..", "matriz_estruturada.json"),
+        "/app/matriz_estruturada.json",
+    ]
+    json_file_path = None
+    for candidate in candidates:
+        if os.path.exists(candidate):
+            json_file_path = candidate
+            break
+    if not json_file_path:
+        raise FileNotFoundError(f"matriz_estruturada.json not found. Tried: {candidates}")
     
     session = SessionLocal()
     try:
