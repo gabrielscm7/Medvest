@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, FileText, Brain, Target, TrendingUp, Calendar } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { getDashboard, type Dashboard } from '../api/dashboard';
 
 export default function DashboardPage() {
@@ -102,6 +103,58 @@ export default function DashboardPage() {
           <p className="text-gray-500 mb-1">questões no total</p>
         </div>
       </div>
+
+      {data?.graficos_area && data.graficos_area.length > 0 && (
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <h2 className="font-semibold text-gray-800 mb-4">Taxa de Acerto por Área</h2>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={data.graficos_area}>
+              <XAxis dataKey="nome" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" height={60} />
+              <YAxis domain={[0, 1]} tickFormatter={(v) => `${Math.round(v * 100)}%`} />
+              <Tooltip formatter={(v: any) => `${Math.round(Number(v) * 100)}%`} />
+              <Bar dataKey="taxa_acerto" fill="#059669" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {data?.graficos_tema && data.graficos_tema.length > 0 && (
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <h2 className="font-semibold text-gray-800 mb-4">Distribuição por Tema</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={data.graficos_tema}
+                dataKey="total_questoes"
+                nameKey="tema"
+                cx="50%"
+                cy="50%"
+                outerRadius={100}
+                label={({ payload }) => `${(payload as any).tema} (${((payload as any).percent * 100).toFixed(0)}%)`}
+              >
+                {data.graficos_tema.map((_, i) => (
+                  <Cell key={i} fill={['#059669', '#2563eb', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#0891b2', '#65a30d'][i % 8]} />
+                ))}
+              </Pie>
+              <Tooltip />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {data?.graficos_competencia && data.graficos_competencia.length > 0 && (
+        <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+          <h2 className="font-semibold text-gray-800 mb-4">Competências (Top 10)</h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={data.graficos_competencia.slice(0, 10)} layout="vertical">
+              <XAxis type="number" domain={[0, 1]} tickFormatter={(v) => `${Math.round(Number(v) * 100)}%`} />
+              <YAxis type="category" dataKey="descricao" width={200} tick={{ fontSize: 10 }} />
+              <Tooltip formatter={(v: any) => `${Math.round(Number(v) * 100)}%`} />
+              <Bar dataKey="taxa_acerto" fill="#2563eb" radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </div>
   );
 }

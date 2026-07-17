@@ -79,6 +79,11 @@ class SimuladoUpdateRequest(BaseModel):
     tipo: Optional[str] = None
 
 
+class GabaritoExtraidoResponse(BaseModel):
+    questoes: list[QuestaoGabarito]
+    metodo: str  # "ia" ou "nenhum"
+
+
 class SimuladoCompletoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -16,6 +16,28 @@ export interface PlanoTemporal {
   carga_diaria_questoes: number;
 }
 
+export interface AreaChartData {
+  nome: string;
+  taxa_acerto: number;
+  peso_medicina: number;
+  total_questoes: number;
+}
+
+export interface CompetenciaChartData {
+  area_nome: string;
+  competencia_numero: number;
+  descricao: string;
+  taxa_acerto: number;
+  total_questoes: number;
+}
+
+export interface TemaChartData {
+  tema: string;
+  area_nome: string;
+  taxa_acerto: number;
+  total_questoes: number;
+}
+
 export interface Dashboard {
   nota_estimada: number;
   nota_corte: number;
@@ -25,6 +47,9 @@ export interface Dashboard {
   taxa_acerto_geral: number;
   heatmap: HabilidadeHeatmap[];
   plano_temporal: PlanoTemporal | null;
+  graficos_area: AreaChartData[];
+  graficos_competencia: CompetenciaChartData[];
+  graficos_tema: TemaChartData[];
 }
 
 export function getDashboard() {

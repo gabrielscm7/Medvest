@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.core.database import SessionLocal, engine, Base
 from app.main import app
-from app.models import Area, Competencia, Habilidade
+from app.models import Area, Competencia, Habilidade, QuestaoIdentificada
 
 client = TestClient(app)
 
@@ -156,6 +156,55 @@ class TestSimulados:
         assert data["questoes"][1]["acerto"] is False
 
 
+    def test_extrair_gabarito_pdf(self):
+        _register()
+        token = _login()
+        upload_resp = client.post(
+            "/api/simulados/upload",
+            files={"file": ("test.pdf", b"%PDF-1.4 fake pdf content with gabarito 1-A 2-B 3-C", "application/pdf")},
+            headers=_auth_header(token),
+        )
+        assert upload_resp.status_code == 201
+        sim_id = upload_resp.json()["id"]
+
+        resp = client.post(f"/api/simulados/{sim_id}/extrair-gabarito", headers=_auth_header(token))
+        assert resp.status_code in (200, 502, 500)
+
+
+class TestUploadTipos:
+    def test_upload_pdf(self):
+        _register()
+        token = _login()
+        resp = client.post(
+            "/api/simulados/upload",
+            files={"file": ("test.pdf", b"%PDF-1.4 fake", "application/pdf")},
+            headers=_auth_header(token),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["tipo"] == "pdf"
+
+    def test_upload_png(self):
+        _register()
+        token = _login()
+        resp = client.post(
+            "/api/simulados/upload",
+            files={"file": ("test.png", b"fake", "image/png")},
+            headers=_auth_header(token),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["tipo"] == "imagem"
+
+    def test_upload_tipo_invalido(self):
+        _register()
+        token = _login()
+        resp = client.post(
+            "/api/simulados/upload",
+            files={"file": ("test.txt", b"fake", "text/plain")},
+            headers=_auth_header(token),
+        )
+        assert resp.status_code == 400
+
+
 class TestRedacao:
     def test_upload_redacao(self):
         _register()
@@ -186,6 +235,9 @@ class TestDashboard:
         assert "nota_estimada" in data
         assert "plano_temporal" in data
         assert data["plano_temporal"]["carga_diaria_questoes"] > 0
+        assert "graficos_area" in data
+        assert "graficos_competencia" in data
+        assert "graficos_tema" in data
 
 
 class TestFlashcards:
@@ -227,6 +279,54 @@ class TestFlashcards:
         )
         assert resp.status_code == 200
         assert resp.json()["intervalo_dias"] > 1
+
+    def test_gerar_de_erros_sem_erros(self):
+        _register()
+        token = _login()
+        resp = client.post(
+            "/api/flashcards/gerar-de-erros",
+            json={"quantidade": 3},
+            headers=_auth_header(token),
+        )
+        assert resp.status_code == 404
+
+    def test_gerar_de_erros_com_simulado(self):
+        _register()
+        token = _login()
+        upload_resp = client.post(
+            "/api/simulados/upload",
+            files={"file": ("test.png", b"fake", "image/png")},
+            headers=_auth_header(token),
+        )
+        sim_id = upload_resp.json()["id"]
+        client.put(
+            f"/api/simulados/{sim_id}/gabarito",
+            json={"questoes": [
+                {"numero_questao": 1, "resposta_aluno": "A", "resposta_correta": "B"},
+            ]},
+            headers=_auth_header(token),
+        )
+        db = SessionLocal()
+        q = db.query(QuestaoIdentificada).filter_by(simulado_upload_id=sim_id).first()
+        q.texto_questao = "Qual a capital do Brasil?"
+        db.commit()
+        db.close()
+
+        resp = client.post(
+            "/api/flashcards/gerar-de-erros",
+            json={"simulado_id": sim_id, "quantidade": 1},
+            headers=_auth_header(token),
+        )
+        assert resp.status_code in (201, 404)
+
+
+def test_parse_questions_from_md():
+    from app.routers.simulados import _parse_questions_from_md
+    md = "1. Qual a capital do Brasil?\n2. Quem descobriu o Brasil?"
+    qs = _parse_questions_from_md(md)
+    assert len(qs) == 2
+    assert qs[0]["numero"] == 1
+    assert "capital" in qs[0]["texto"]
 
 
 class TestHealth:

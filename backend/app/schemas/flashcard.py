@@ -26,6 +26,11 @@ class FlashcardReview(BaseModel):
     dificuldade: str
 
 
+class FlashcardFromErrorsRequest(BaseModel):
+    simulado_id: Optional[int] = None
+    quantidade: int = 5
+
+
 class FlashcardRescheduleResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

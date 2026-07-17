@@ -26,6 +26,28 @@ class EvolucaoNota(BaseModel):
     nota_corte: float
 
 
+class AreaChartData(BaseModel):
+    nome: str
+    taxa_acerto: float
+    peso_medicina: float
+    total_questoes: int
+
+
+class CompetenciaChartData(BaseModel):
+    area_nome: str
+    competencia_numero: int
+    descricao: str
+    taxa_acerto: float
+    total_questoes: int
+
+
+class TemaChartData(BaseModel):
+    tema: str
+    area_nome: str
+    taxa_acerto: float
+    total_questoes: int
+
+
 class DashboardResponse(BaseModel):
     nota_estimada: float
     nota_corte: float
@@ -36,3 +58,6 @@ class DashboardResponse(BaseModel):
     heatmap: list[HabilidadeHeatmap] = []
     plano_temporal: Optional[PlanoTemporalResponse] = None
     evolucao_notas: list[EvolucaoNota] = []
+    graficos_area: list[AreaChartData] = []
+    graficos_competencia: list[CompetenciaChartData] = []
+    graficos_tema: list[TemaChartData] = []
