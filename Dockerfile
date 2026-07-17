@@ -19,7 +19,6 @@ ENV PYTHONPATH=/app
 ENV FRONTEND_DIR=/app/frontend_dist
 
 RUN mkdir -p uploads
-RUN python -m app.scripts.seed_matrix
 
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "python -m app.scripts.seed_matrix && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
