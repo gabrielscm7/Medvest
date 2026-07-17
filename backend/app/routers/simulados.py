@@ -109,6 +109,12 @@ async def detectar_estrutura(
     if not simulado:
         raise HTTPException(status_code=404, detail="Simulado não encontrado")
 
+    if not os.path.exists(simulado.arquivo_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Arquivo do simulado não encontrado no servidor. Faça o upload novamente.",
+        )
+
     qwen = get_qwen_provider()
     if not qwen.api_key and not _is_pdf(simulado.arquivo_path):
         # fallback: tenta DeepSeek para detecção visual
@@ -321,6 +327,12 @@ async def extrair_texto_questoes(
     if not simulado:
         raise HTTPException(status_code=404, detail="Simulado não encontrado")
 
+    if not os.path.exists(simulado.arquivo_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Arquivo do simulado não encontrado no servidor. Faça o upload novamente.",
+        )
+
     ai = _ai()
     is_deepseek = isinstance(ai, DeepSeekProvider)
 
@@ -440,6 +452,12 @@ async def classificar_questoes(
     )
     if not simulado:
         raise HTTPException(status_code=404, detail="Simulado não encontrado")
+
+    if not os.path.exists(simulado.arquivo_path):
+        raise HTTPException(
+            status_code=404,
+            detail="Arquivo do simulado não encontrado no servidor. Faça o upload novamente.",
+        )
 
     questoes = (
         db.query(QuestaoIdentificada)
