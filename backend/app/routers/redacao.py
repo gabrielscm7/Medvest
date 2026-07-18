@@ -27,10 +27,14 @@ def _ai() -> BaseAIProvider:
 
 
 def _ocr() -> BaseAIProvider:
+    from app.services.ai_provider.qwen_provider import get_qwen_provider
     qwen = get_qwen_provider()
     if qwen.api_key:
         return qwen
-    return _ai()
+    raise HTTPException(
+        status_code=400,
+        detail="OCR de imagens requer QWEN_API_KEY configurada. O modelo DeepSeek não suporta análise de imagens.",
+    )
 
 
 @router.get("/", response_model=list[RedacaoResponse])

@@ -206,7 +206,7 @@ class TestUploadTipos:
 
 
 class TestRedacao:
-    def test_upload_redacao(self):
+    def test_upload_redacao_sem_qwen(self):
         _register()
         token = _login()
         resp = client.post(
@@ -214,8 +214,8 @@ class TestRedacao:
             files={"file": ("redacao.png", b"handwritten essay text", "image/png")},
             headers=_auth_header(token),
         )
-        assert resp.status_code == 201
-        assert "texto_ocr" in resp.json()
+        assert resp.status_code == 400
+        assert "QWEN_API_KEY" in resp.json()["detail"]
 
     def test_list_redacoes(self):
         _register()

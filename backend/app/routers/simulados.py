@@ -40,11 +40,12 @@ def _ai() -> BaseAIProvider:
     return get_fallback_provider()
 
 
-def _ocr() -> QwenProvider | BaseAIProvider:
-    provider = get_qwen_provider()
-    if provider.api_key:
-        return provider
-    return _ai()
+def _check_vision() -> None:
+    if not get_qwen_provider().api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Análise de imagens requer QWEN_API_KEY configurada. O modelo DeepSeek não suporta imagens.",
+        )
 
 
 def _is_pdf(path: str) -> bool:
@@ -182,15 +183,17 @@ async def detectar_estrutura(
                 estrutura = _json.loads(raw)
             else:
                 estrutura = {"total_questoes": 90, "alternativas_por_questao": 5, "numeracao_inicial": 1}
-        elif not qwen.api_key:
-            with open(simulado.arquivo_path, "rb") as f:
-                image_bytes = f.read()
-            ai = _ai()
-            estrutura = await ai.detect_exam_structure(image_bytes)
-        else:
+        elif qwen.api_key:
             with open(simulado.arquivo_path, "rb") as f:
                 image_bytes = f.read()
             estrutura = await qwen.detect_exam_structure(image_bytes)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Detecção em imagens requer QWEN_API_KEY configurada. Para PDFs, a detecção funciona normalmente.",
+            )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Falha na detecção via IA: {str(e)}")
 
@@ -439,11 +442,12 @@ async def extrair_texto_questoes(
                 if isinstance(questoes_texto, dict) and "questoes" in questoes_texto:
                     questoes_texto = questoes_texto["questoes"]
         else:
+            _check_vision()
             import base64
             with open(simulado.arquivo_path, "rb") as f:
                 image_bytes = f.read()
 
-            qwen = _ocr()
+            qwen = get_qwen_provider()
             ocr_text = await qwen.ocr_image(image_bytes)
 
             prompt = (
@@ -648,13 +652,11 @@ async def extrair_gabarito(
             except Exception:
                 questoes_extraidas = []
     elif _is_image(simulado.arquivo_path):
+        _check_vision()
         with open(simulado.arquivo_path, "rb") as f:
             image_bytes = f.read()
         qwen = get_qwen_provider()
-        if qwen.api_key:
-            ocr_text = await qwen.ocr_image(image_bytes)
-        else:
-            ocr_text = await ai.ocr_image(image_bytes)
+        ocr_text = await qwen.ocr_image(image_bytes)
         if is_deepseek:
             prompt = (
                 "Extraia o GABARITO (respostas corretas) do texto OCR abaixo. "
