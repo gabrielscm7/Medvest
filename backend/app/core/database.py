@@ -1,24 +1,8 @@
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
-from app.core.config import settings as _settings
+from app.core.config import settings
 
-
-def _build_url():
-    url = os.getenv("DATABASE_URL", "")
-    if url and not url.startswith("${{"):
-        return url
-    host = os.getenv("PGHOST", "")
-    if host:
-        port = os.getenv("PGPORT", "5432")
-        user = os.getenv("PGUSER", "postgres")
-        password = os.getenv("PGPASSWORD", "")
-        database = os.getenv("PGDATABASE", "medvest")
-        return f"postgresql://{user}:{password}@{host}:{port}/{database}"
-    return "sqlite:///./medvest.db"
-
-
-DATABASE_URL = _build_url()
+DATABASE_URL = settings.DATABASE_URL
 
 connect_args = {}
 if DATABASE_URL.startswith("sqlite"):

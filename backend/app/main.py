@@ -6,22 +6,12 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.core.database import get_db, engine, Base
 from app.models import *  # noqa: F401,F403
 from app.routers import auth, flashcards, simulados, redacao, dashboard
 
 Base.metadata.create_all(bind=engine)
-
-# Migrações incrementais (colunas novas em tabelas existentes)
-with engine.connect() as conn:
-    for stmt in [
-        "ALTER TABLE questao_identificada ADD COLUMN IF NOT EXISTS texto_questao TEXT",
-    ]:
-        try:
-            conn.execute(text(stmt))
-            conn.commit()
-        except Exception:
-            conn.rollback()
 
 app = FastAPI(
     title="Medvest API",
@@ -31,7 +21,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -52,6 +52,11 @@ class DeepSeekProvider(BaseAIProvider):
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
+    async def _call_raw(self, payload: dict) -> httpx.Response:
+        client = self._get_client()
+        response = await client.post("/chat/completions", json=payload)
+        return response
+
     async def ocr_image(self, image_bytes: bytes) -> str:
         b64 = base64.b64encode(image_bytes).decode()
         messages = [

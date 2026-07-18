@@ -99,7 +99,10 @@ async def upload_simulado(
     aluno: Aluno = Depends(get_aluno_atual),
     db: Session = Depends(get_db),
 ):
-    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename else ""
+    try:
+        ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename else ""
+    except Exception:
+        ext = ""
     if ext in ("pdf",):
         tipo_real = "pdf"
     elif ext in ("png", "jpg", "jpeg", "webp", "bmp", "tiff"):
@@ -145,48 +148,51 @@ async def detectar_estrutura(
             detail="Arquivo do simulado não encontrado no servidor. Faça o upload novamente.",
         )
 
-    qwen = get_qwen_provider()
-    if _is_pdf(simulado.arquivo_path):
-        md_text = _convert_pdf_to_markdown(simulado.arquivo_path)
-        ai = _ai()
-        if ai.api_key and ai.api_key != "your-deepseek-key-here":
-            prompt = (
-                "Analise o texto abaixo extraído de um PDF de prova ENEM e determine:\n"
-                "- Quantidade total de questões\n"
-                "- Número de alternativas por questão (4 ou 5)\n"
-                "- Numeração inicial\n"
-                "Retorne JSON: {\"total_questoes\": N, \"alternativas_por_questao\": N, \"numeracao_inicial\": N}\n\n"
-                f"Texto:\n{md_text[:8000]}"
-            )
-            client = ai._get_client()
-            response = await client.post(
-                "/chat/completions",
-                json={
-                    "model": ai.model,
-                    "messages": [
-                        {"role": "system", "content": "Você é um assistente especializado em ENEM."},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "max_tokens": 1024,
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-            response.raise_for_status()
-            raw = response.json()["choices"][0]["message"]["content"]
-            import json as _json
-            estrutura = _json.loads(raw)
+    try:
+        qwen = get_qwen_provider()
+        if _is_pdf(simulado.arquivo_path):
+            md_text = _convert_pdf_to_markdown(simulado.arquivo_path)
+            ai = _ai()
+            if ai.api_key and ai.api_key != "your-deepseek-key-here":
+                prompt = (
+                    "Analise o texto abaixo extraído de um PDF de prova ENEM e determine:\n"
+                    "- Quantidade total de questões\n"
+                    "- Número de alternativas por questão (4 ou 5)\n"
+                    "- Numeração inicial\n"
+                    "Retorne JSON: {\"total_questoes\": N, \"alternativas_por_questao\": N, \"numeracao_inicial\": N}\n\n"
+                    f"Texto:\n{md_text[:8000]}"
+                )
+                client = ai._get_client()
+                response = await client.post(
+                    "/chat/completions",
+                    json={
+                        "model": ai.model,
+                        "messages": [
+                            {"role": "system", "content": "Você é um assistente especializado em ENEM."},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "max_tokens": 1024,
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"},
+                    },
+                )
+                response.raise_for_status()
+                raw = response.json()["choices"][0]["message"]["content"]
+                import json as _json
+                estrutura = _json.loads(raw)
+            else:
+                estrutura = {"total_questoes": 90, "alternativas_por_questao": 5, "numeracao_inicial": 1}
+        elif not qwen.api_key:
+            with open(simulado.arquivo_path, "rb") as f:
+                image_bytes = f.read()
+            ai = _ai()
+            estrutura = await ai.detect_exam_structure(image_bytes)
         else:
-            estrutura = {"total_questoes": 90, "alternativas_por_questao": 5, "numeracao_inicial": 1}
-    elif not qwen.api_key:
-        with open(simulado.arquivo_path, "rb") as f:
-            image_bytes = f.read()
-        ai = _ai()
-        estrutura = await ai.detect_exam_structure(image_bytes)
-    else:
-        with open(simulado.arquivo_path, "rb") as f:
-            image_bytes = f.read()
-        estrutura = await qwen.detect_exam_structure(image_bytes)
+            with open(simulado.arquivo_path, "rb") as f:
+                image_bytes = f.read()
+            estrutura = await qwen.detect_exam_structure(image_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Falha na detecção via IA: {str(e)}")
 
     simulado.total_questoes_detectado = estrutura.get("total_questoes", 45)
     simulado.alternativas_por_questao = estrutura.get("alternativas_por_questao", 5)
@@ -620,10 +626,8 @@ async def extrair_gabarito(
                 '{"numero_questao": <número>, "resposta_correta": "<letra>"}\n\n'
                 f"Texto:\n{tail}"
             )
-            client = ai._get_client()
-            response = await client.post(
-                "/chat/completions",
-                json={
+            try:
+                response = await ai._call_raw({
                     "model": ai.model,
                     "messages": [
                         {"role": "system", "content": "Você é um assistente especializado em ENEM."},
@@ -632,16 +636,17 @@ async def extrair_gabarito(
                     "max_tokens": 4096,
                     "temperature": 0.1,
                     "response_format": {"type": "json_object"},
-                },
-            )
-            response.raise_for_status()
-            raw = response.json()["choices"][0]["message"]["content"]
-            import json as _json
-            data = _json.loads(raw)
-            if isinstance(data, dict):
-                questoes_extraidas = data.get("questoes", data.get("gabarito", []))
-            else:
-                questoes_extraidas = data
+                })
+                response.raise_for_status()
+                raw = response.json()["choices"][0]["message"]["content"]
+                import json as _json
+                data = _json.loads(raw)
+                if isinstance(data, dict):
+                    questoes_extraidas = data.get("questoes", data.get("gabarito", []))
+                else:
+                    questoes_extraidas = data
+            except Exception:
+                questoes_extraidas = []
     elif _is_image(simulado.arquivo_path):
         with open(simulado.arquivo_path, "rb") as f:
             image_bytes = f.read()
@@ -657,10 +662,8 @@ async def extrair_gabarito(
                 '{"numero_questao": <número>, "resposta_correta": "<letra>"}\n\n'
                 f"Texto OCR:\n{ocr_text}"
             )
-            client = ai._get_client()
-            response = await client.post(
-                "/chat/completions",
-                json={
+            try:
+                response = await ai._call_raw({
                     "model": ai.model,
                     "messages": [
                         {"role": "system", "content": "Você é um assistente especializado em ENEM."},
@@ -669,12 +672,14 @@ async def extrair_gabarito(
                     "max_tokens": 4096,
                     "temperature": 0.1,
                     "response_format": {"type": "json_object"},
-                },
-            )
-            response.raise_for_status()
-            raw = response.json()["choices"][0]["message"]["content"]
-            data = _json.loads(raw)
-            questoes_extraidas = data if isinstance(data, list) else data.get("questoes", data.get("gabarito", []))
+                })
+                response.raise_for_status()
+                raw = response.json()["choices"][0]["message"]["content"]
+                import json as _json
+                data = _json.loads(raw)
+                questoes_extraidas = data if isinstance(data, list) else data.get("questoes", data.get("gabarito", []))
+            except Exception:
+                questoes_extraidas = []
     else:
         raise HTTPException(status_code=400, detail="Tipo de arquivo não suportado para extração de gabarito")
 
